@@ -42,8 +42,8 @@ fileprivate struct Brightness: Equatable, Hashable {
 ///
 /// - Parameter img: The image to get the colors from
 /// - Returns: Both start and end colors to use for the gradients
-public func GradeColors(forImage img: UIImage) -> (Color, Color) {
-    return GradeColors(forCGImage: img.cgImage!)
+public func GradeColors(forImage img: UIImage) -> (Color, Color)? {
+    return GradeColors(forCGImage: img.cgImage)
 }
 #endif
 
@@ -51,29 +51,28 @@ public func GradeColors(forImage img: UIImage) -> (Color, Color) {
 ///
 /// - Parameter img: The image to get the colors from
 /// - Returns: Both start and end colors to use for the gradients
-public func GradeColors(forCGImage img: CGImage) -> (Color, Color)  {
+public func GradeColors(forCGImage img: CGImage?) -> (Color, Color)?  {
 
-    let bytesPerPixels = 4
-    let bytesPerRow = img.width*bytesPerPixels
-    let bufSize = img.width*img.height
-    var buff = calloc(bufSize, bytesPerPixels)!
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let callback: CGBitmapContextReleaseDataCallback = { (data, _) in
-        free(data)
+    guard let img = img else {
+        print("No CGimage provided")
+        return nil
+    }
+    guard let buff = img.dataProvider?.data as Data?, img.bitsPerPixel == 4*8 && img.bitsPerComponent == 8 else {
+        print("Current version only support sRGB colospace with 1 byte per component")
+        return nil
     }
 
-    let ctx = CGContext(data: buff, width: img.width, height: img.height, bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue, releaseCallback:callback, releaseInfo: nil)!
-    ctx.draw(img, in: CGRect(origin: .zero, size: CGSize(width: img.width, height: img.height)))
-
+    let bytesPerPixels = 8
     var pixelsValues: [Int: [UInt8]] = [:]
-    for index in 0..<bufSize {
-        let val = buff.load(as: UInt8.self)
+    for index in 0..<buff.count {
+
+        var val: UInt8 = 0
+        buff.copyBytes(to: &val, from: index..<index+1)
         let ix = Int(floor(CGFloat(index)/CGFloat(bytesPerPixels)))
         if pixelsValues[ix] == nil {
             pixelsValues[ix] = [UInt8]()
         }
         pixelsValues[ix]?.append(val)
-        buff += 1
     }
     let colors = pixelsValues.filter { validatePixel($0.value) }.map { RGBA(red: $0.value[0], green: $0.value[1], blue: $0.value[2], alpha: $0.value[3]) }
 
